@@ -14,13 +14,22 @@ import com.yoshione.fingen.BuildConfig;
 import com.yoshione.fingen.DBHelper;
 import com.yoshione.fingen.FGApplication;
 import com.yoshione.fingen.FgConst;
+import com.yoshione.fingen.csv.CsvImporter;
+import com.yoshione.fingen.dao.TransactionsDAO;
+import com.yoshione.fingen.dropbox.DeleteTask;
 import com.yoshione.fingen.dropbox.DropboxClient;
+import com.yoshione.fingen.dropbox.UploadTask;
+import com.yoshione.fingen.interfaces.IOnComplete;
+import com.yoshione.fingen.model.Transaction;
+import com.yoshione.fingen.utils.FileUtils;
+import com.yoshione.fingen.utils.PrefUtils;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Date;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -35,8 +44,8 @@ public class BackupJob extends DailyJob {
     public static int schedule() {
         // schedule between 1 and 6 AM
         return DailyJob.schedule(new JobRequest.Builder(TAG),
-                TimeUnit.HOURS.toMillis(1) + TimeUnit.MINUTES.toMillis(00),
-                TimeUnit.HOURS.toMillis(6) + TimeUnit.MINUTES.toMillis(00));
+                TimeUnit.HOURS.toMillis(01) + TimeUnit.MINUTES.toMillis(00),
+                TimeUnit.HOURS.toMillis(03) + TimeUnit.MINUTES.toMillis(00));
     }
 
     @NonNull
@@ -46,24 +55,94 @@ public class BackupJob extends DailyJob {
             Context context = FGApplication.getContext();
             SharedPreferences dropboxPrefs = context.getSharedPreferences("com.yoshione.fingen.dropbox", Context.MODE_PRIVATE);
             String token = dropboxPrefs.getString("dropbox-token", null);
-            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-            // Do the task here
+            /****************/
+            List<Transaction> transactions;
+            transactions = TransactionsDAO.getInstance(context).getTransactionsByDepartmentDate(context);
+
+            /***********/
+
             try {
                 File zip = DBHelper.getInstance(context).backupDB(true);
+                /****************/
+                String Dep = "";
+                Dep = "" + PrefUtils.getDefaultDepartment(context);
+
+                String path = FileUtils.getExtFingenBackupFolder() + "CSV_Export_" + Dep + ".csv";
+
+                File CSVBackupFile = FileUtils.zip(new String[]{context.getDatabasePath("fingen.db").toString()}, path);
+                if (CSVBackupFile.exists()) {
+//                try {
+                    CSVBackupFile.delete();
+  /*              }
+               catch (IOException ee) {
+                    ee.printStackTrace();
+                    return;
+                }*/
+                }
+                final CsvImporter csvImporter = new CsvImporter(context, path, 0, true);
+                /************/
+
                 if (token != null && zip != null) {
-                    DbxClientV2 dbxClient = DropboxClient.getClient(token);
-                    // Upload to Dropbox
-                    InputStream inputStream = new FileInputStream(zip);
+                    /************/
+//                csvImporter.setmCsvImportProgressChangeListener(myCsvImportProgressChangeListener);
+
+                    Thread t = new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            csvImporter.saveCSV(transactions, true);
+                        }
+                    });
+                    t.start();
+                    /************/
+                    Thread tt = new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            new DeleteTask(DropboxClient.getClient(token), CSVBackupFile, new IOnComplete() {
+                                @Override
+                                public void onComplete() {
+                                }
+                            }).execute();
+                        }
+                    });
+                    tt.start();
                     try {
-                        dbxClient.files().uploadBuilder("/" + zip.getName()) //Path in the user's Dropbox to save the file.
-                                .withMode(WriteMode.OVERWRITE) //always overwrite existing file
-                                .uploadAndFinish(inputStream);
-                        prefs.edit().putLong(FgConst.PREF_SHOW_LAST_SUCCESFUL_BACKUP_TO_DROPBOX, new Date().getTime()).apply();
-                    } catch (DbxException e) {
+                        tt.sleep(3000);
+                    } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
-//                Log.d("Upload Status", "Success");
 
+                    Thread ttt = new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            new UploadTask(DropboxClient.getClient(token), zip, new IOnComplete() {
+                                @Override
+                                public void onComplete() {
+                                    SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+                                    prefs.edit().putLong(FgConst.PREF_SHOW_LAST_SUCCESFUL_BACKUP_TO_DROPBOX, new Date().getTime()).apply();
+                                }
+                            }).execute();
+                        }
+                    });
+                    ttt.start();
+/**************/
+                    Thread tttt = new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            new UploadTask(DropboxClient.getClient(token), CSVBackupFile, new IOnComplete() {
+                                @Override
+                                public void onComplete() {
+                                }
+                            }).execute();
+                        }
+                    });
+                    tttt.start();
+                    try {
+                        tttt.sleep(5000);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+
+                    /*************/
                 }
             } catch (IOException e) {
                 e.printStackTrace();

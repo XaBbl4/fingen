@@ -25,6 +25,8 @@ import com.evernote.android.job.JobManager;
 import com.github.omadahealth.lollipin.lib.managers.LockManager;
 import com.yoshione.fingen.backup.BackupJob;
 import com.yoshione.fingen.backup.BackupJobCreator;
+import com.yoshione.fingen.backup.RestoreJob;
+import com.yoshione.fingen.backup.RestoreJobCreator;
 import com.yoshione.fingen.backup.BackupTestJobCreator;
 import com.yoshione.fingen.di.AppComponent;
 import com.yoshione.fingen.di.DaggerAppComponent;
@@ -87,6 +89,7 @@ public class FGApplication extends Application implements ISyncAnimMethods {
         mContext = this;
 
         JobManager.create(this).addJobCreator(new BackupJobCreator());
+        JobManager.create(this).addJobCreator(new RestoreJobCreator());
         JobManager.create(this).addJobCreator(new BackupTestJobCreator());
 
         mUpdateUIHandler = new UpdateUIHandler(this);
@@ -108,6 +111,7 @@ public class FGApplication extends Application implements ISyncAnimMethods {
         mCustomIntentReceiver = new CustomIntentReceiver();
 
         BackupJob.schedule();
+        RestoreJob.schedule();
     }
 
     public static AppComponent getAppComponent() {

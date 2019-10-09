@@ -36,13 +36,18 @@ import com.dropbox.core.v2.DbxClientV2;
 import com.dropbox.core.v2.files.FileMetadata;
 import com.dropbox.core.v2.files.Metadata;
 import com.dropbox.core.v2.users.FullAccount;
+import com.yoshione.fingen.csv.CsvImporter;
+import com.yoshione.fingen.dao.TransactionsDAO;
+import com.yoshione.fingen.dropbox.DeleteTask;
 import com.yoshione.fingen.dropbox.DropboxClient;
 import com.yoshione.fingen.dropbox.UploadTask;
 import com.yoshione.fingen.dropbox.UserAccountTask;
 import com.yoshione.fingen.interfaces.IOnComplete;
+import com.yoshione.fingen.model.Transaction;
 import com.yoshione.fingen.utils.DateTimeFormatter;
 import com.yoshione.fingen.utils.FabMenuController;
 import com.yoshione.fingen.utils.FileUtils;
+import com.yoshione.fingen.utils.PrefUtils;
 import com.yoshione.fingen.widgets.ToolbarActivity;
 
 import java.io.File;
@@ -289,9 +294,66 @@ public class ActivityBackup extends ToolbarActivity {
     void backupDB() {
         SharedPreferences dropboxPrefs = getSharedPreferences("com.yoshione.fingen.dropbox", Context.MODE_PRIVATE);
         String token = dropboxPrefs.getString("dropbox-token", null);
+        /****************/
+        List<Transaction> transactions;
+        Context context = FGApplication.getContext();
+        transactions = TransactionsDAO.getInstance(context).getTransactionsByDepartmentDate(context);
+
+        /***********/
+
         try {
             File zip = DBHelper.getInstance(getApplicationContext()).backupDB(true);
+            /****************/
+            String Dep = "";
+            Dep = "" + PrefUtils.getDefaultDepartment(context);
+
+            String path = FileUtils.getExtFingenBackupFolder() + "CSV_Export_" + Dep + ".csv";
+
+            File CSVBackupFile = FileUtils.zip(new String[]{context.getDatabasePath("fingen.db").toString()}, path);
+            if (CSVBackupFile.exists()) {
+//                try {
+                    CSVBackupFile.delete();
+  /*              }
+               catch (IOException ee) {
+                    ee.printStackTrace();
+                    return;
+                }*/
+            }
+            final CsvImporter csvImporter = new CsvImporter(context, path, 0, true);
+            /************/
+
             if (token != null && zip != null) {
+                /************/
+//                csvImporter.setmCsvImportProgressChangeListener(myCsvImportProgressChangeListener);
+
+                Thread t = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        csvImporter.saveCSV(transactions, true);
+                    }
+                });
+                t.start();
+                /************/
+                Thread tt = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                new DeleteTask(DropboxClient.getClient(token), CSVBackupFile, new IOnComplete() {
+                    @Override
+                    public void onComplete() {
+                    }
+                }).execute();
+                    }
+                });
+                tt.start();
+                try {
+                    tt.sleep(3000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
+                Thread ttt = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
                 new UploadTask(DropboxClient.getClient(token), zip, new IOnComplete() {
                     @Override
                     public void onComplete() {
@@ -301,6 +363,28 @@ public class ActivityBackup extends ToolbarActivity {
                         initLastDropboxBackupField();
                     }
                 }).execute();
+                    }
+                });
+                ttt.start();
+/**************/
+                Thread tttt = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                new UploadTask(DropboxClient.getClient(token), CSVBackupFile, new IOnComplete() {
+                    @Override
+                    public void onComplete() {
+                    }
+                }).execute();
+                    }
+                });
+                tttt.start();
+                try {
+                    tttt.sleep(5000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
+                /*************/
             }
         } catch (IOException e) {
             e.printStackTrace();

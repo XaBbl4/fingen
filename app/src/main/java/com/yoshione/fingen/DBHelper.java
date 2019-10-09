@@ -31,6 +31,7 @@ import com.yoshione.fingen.model.BaseModel;
 import com.yoshione.fingen.model.Cabbage;
 import com.yoshione.fingen.utils.FileUtils;
 import com.yoshione.fingen.utils.Lg;
+import com.yoshione.fingen.utils.PrefUtils;
 import com.yoshione.fingen.utils.Translit;
 
 import java.io.BufferedReader;
@@ -906,8 +907,10 @@ public class DBHelper extends SQLiteOpenHelper implements BaseColumns {
         if (ActivityCompat.checkSelfPermission(mContext, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
             String backupPath = FileUtils.getExtFingenBackupFolder();
             String alpha = "";
+            String Dept = "";
+            Dept = "_" + PrefUtils.getDefaultDepartment(mContext);
             if (BuildConfig.FLAVOR.equals("nd")) alpha = "_alpha";
-            @SuppressLint("SimpleDateFormat") String backupFile = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date()) + alpha + ".zip";
+            @SuppressLint("SimpleDateFormat") String backupFile = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date()) + alpha + Dept + ".zip";
 
             if (!backupPath.isEmpty()) {
                 SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(mContext);

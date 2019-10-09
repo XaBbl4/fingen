@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
+import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v4.util.LongSparseArray;
 import android.text.TextUtils;
@@ -12,6 +13,7 @@ import android.util.Pair;
 
 import com.yoshione.fingen.BuildConfig;
 import com.yoshione.fingen.DBHelper;
+import com.yoshione.fingen.FgConst;
 import com.yoshione.fingen.classes.ListSumsByCabbage;
 import com.yoshione.fingen.classes.SumsByCabbage;
 import com.yoshione.fingen.filters.AbstractFilter;
@@ -375,6 +377,54 @@ public class TransactionsDAO extends BaseDAO implements AbstractDAO, IDaoInherit
         return transactions;
     }
 
+/*************************/
+    public List<Transaction> getTransactionsByDepartmentDate(Context context) {
+        Calendar c = Calendar.getInstance(LocaleUtils.getLocale(context));
+        c.setTime(new Date());
+        c.set(Calendar.HOUR_OF_DAY, 23); //anything 0 - 23
+        c.set(Calendar.MINUTE, 59);
+        c.set(Calendar.SECOND, 59);
+        c.set(Calendar.MILLISECOND, 999);
+        Date end = c.getTime();
+        c.set(Calendar.HOUR_OF_DAY, 0); //anything 0 - 23
+        c.set(Calendar.MINUTE, 0);
+        c.set(Calendar.SECOND, 0);
+        c.set(Calendar.MILLISECOND, 0);
+//        Date start = c.getTime() - 604800000;
+        c.add(Calendar.DAY_OF_YEAR, -7);
+        Date start = c.getTime();
+        String select = String.format(
+                "%s = '%s' AND\n" +
+                        "%s > '%s' AND \n" +
+                        "%s < '%s' AND \n" +
+                        "Deleted = 0",
+                DBHelper.C_LOG_TRANSACTIONS_DEPARTMENT, PreferenceManager.getDefaultSharedPreferences(context).getString(FgConst.PREF_DEFAULT_DEPARTMENT, "-1"),
+                DBHelper.C_LOG_TRANSACTIONS_DATETIME, String.valueOf(start.getTime()),
+                DBHelper.C_LOG_TRANSACTIONS_DATETIME, String.valueOf(end.getTime()));
+
+//        Log.d(TAG, select);
+
+        Cursor cursor = mDatabase.query(T_LOG_TRANSACTIONS, null,
+                select, null,
+                null, null, null);
+
+        List<Transaction> transactions = new ArrayList<>();
+        if (cursor != null) {
+            try {
+                if (cursor.moveToFirst()) {
+                    while (!cursor.isAfterLast()) {
+                        transactions.add(cursorToTransaction(cursor));
+                        cursor.moveToNext();
+                    }
+                }
+            } finally {
+                cursor.close();
+            }
+        }
+        return transactions;
+    }
+
+/***************/
     @Override
     public List<?> getAllModels() throws Exception {
         return getAllTransactions();

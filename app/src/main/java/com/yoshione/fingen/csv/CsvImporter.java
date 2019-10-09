@@ -345,7 +345,7 @@ public class CsvImporter {
             }
         });
 
-        mCsvImportProgressChangeListener.onOperationComplete(IProgressEventsListener.CODE_OK);
+/*Тут        mCsvImportProgressChangeListener.onOperationComplete(IProgressEventsListener.CODE_OK);*/
     }
 
     public void loadFinancistoCSV() throws IOException {
@@ -664,7 +664,7 @@ public class CsvImporter {
         final CSV csv = CSV.separator(mSeparator).quote(mQuote).skipLines(0).charset(mCharset).create();
 
         final Transaction transaction = new Transaction(PrefUtils.getDefDepID(mContext));
-        final boolean skipDuplicates = PreferenceManager.getDefaultSharedPreferences(mContext).getBoolean("custom_csv_skip_diplicates", false);
+        final boolean skipDuplicates = PreferenceManager.getDefaultSharedPreferences(mContext).getBoolean("financisto_csv_skip_diplicates", false);
         List<IAbstractModel> transactionList = new ArrayList<>();
         CsvCachesSet caches = new CsvCachesSet(mContext);
 
@@ -708,6 +708,56 @@ public class CsvImporter {
 
 
         mCsvImportProgressChangeListener.onOperationComplete(IProgressEventsListener.CODE_OK);
+    }
+
+
+    public void loadFingenBackupCSV() throws IOException {
+        final CSV csv = CSV.separator(mSeparator).quote(mQuote).skipLines(0).charset(mCharset).create();
+
+        final Transaction transaction = new Transaction(PrefUtils.getDefDepID(mContext));
+        final boolean skipDuplicates = PreferenceManager.getDefaultSharedPreferences(mContext).getBoolean("financisto_csv_skip_diplicates", false);
+        List<IAbstractModel> transactionList = new ArrayList<>();
+        CsvCachesSet caches = new CsvCachesSet(mContext);
+
+        mCount = 0;
+
+        try {
+
+            HashMap<String, CsvColumn> columns = new HashMap<>();
+            List<String> columnNames = Arrays.asList(CN_DATE, CN_TIME, CN_ACCOUNT, CN_AMOUNT, CN_CURRENCY, CN_TYPE, CN_EXRATE, CN_CATEGORY, CN_PAYEE, CN_LOCATION, CN_PROJECT, CN_DEPARTMENT, CN_NOTE, CN_LON, CN_LAT, CN_FN, CN_FD,CN_FP);
+            List<String> csvCaptions = loadColumnsFromCSV();
+            for (String columnName : columnNames) {
+                columns.put(columnName, new CsvColumn(columnName, csvCaptions.indexOf(columnName)));
+            }
+
+            csv.read(mFileName, new CSVReadProc() {
+                @Override
+                public void procRow(int i, String... values) {
+                    if (Arrays.asList(values).size() > 0) {
+                        mCount++;
+                    }
+                }
+            });
+
+            mCurrentRow = 0;
+            @SuppressLint("SimpleDateFormat") FingenCsvImportProc fingenCsvImportProc = new FingenCsvImportProc(columns, new SimpleDateFormat("yyyy-MM-dd HH:mm:ss"), transaction, skipDuplicates, transactionList, caches);
+
+            final SQLiteDatabase database = DBHelper.getInstance(mContext).getDatabase();
+            database.beginTransaction();
+            csv.read(mFileName, fingenCsvImportProc);
+            database.setTransactionSuccessful();
+            database.endTransaction();
+            if (!transactionList.isEmpty()) {
+                TransactionsDAO.getInstance(mContext).bulkCreateModel(transactionList, null, false);
+            }
+
+            DBHelper.getInstance(mContext).rebuildDB();
+        } catch (Exception e) {
+//            mCsvImportProgressChangeListener.onOperationComplete(IProgressEventsListener.CODE_ERROR);
+            return;
+        }
+
+//        mCsvImportProgressChangeListener.onOperationComplete(IProgressEventsListener.CODE_OK);
     }
 
     private IAbstractModel parseNestedModel(CsvImportCache cache, String vls[], int pos, int modelType, AbstractDAO abstractDAO, Context context) throws Exception {
